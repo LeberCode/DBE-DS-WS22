@@ -1,68 +1,54 @@
 import socket
-import select
+import threading
 
-HEADER_LENGTH = 10
-IP = "127.0.0.1"
-PORT = 1234
-
-server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-
-server_socket.bind((IP, PORT))
-server_socket.listen()
-
-sockets_list = [server_socket]
+HOST = ''
+PORT = 8080
+BUFSIZ = 1024
+ADDR = (HOST, PORT)
 
 clients = {}
+addresses = {}
+
+SERVER = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+SERVER.bind(ADDR)
+
+def accept_incoming_connections():
+    while True:
+        client, client_address = SERVER.accept()
+        print(f"{client_address}: has connected.")
+        client.send(bytes("Greetings! Now type your name and press enter!", "utf8"))
+        addresses[client] = client_address
+        threading.Thread(target=handle_client, args=(client,)).start()
 
 
-def receive_message(client_socket):
-    try:
-        message_header = client_socket.recv(HEADER_LENGTH)
+def handle_client(client):
+    name = client.recv(BUFSIZ).decode("utf8")
+    welcome = f"Welcome {name}! If you ever want to quit, type '{quit}' to exit."
+    client.send(bytes(welcome, "utf8"))
+    msg = f"{name} has joined the chat!"
+    broadcast(bytes(msg, "utf8"))
+    clients[client] = name
 
-        if not len(message_header):
-            return False
-
-        message_length = int(message_header.decode("utf-8").strip())
-        return {"header": message_header, "data": client_socket.recv(message_length)}
-
-
-    except:
-        return False
-
-
-while True:
-    read_sockets, _, exception_sockets = select.select(sockets_list, [], sockets_list)
-    for notified_socket in read_sockets:
-        if notified_socket == server_socket:
-            client_socket, client_address = server_socket.accept()
-
-            user = receive_message(client_socket)
-            if user is False:
-                continue
-            
-            sockets_list.append(client_socket)
-            
-            clients[client_socket] = user
-
-            print(f"Accepted new connection from {client_address[0]}:{client_address[1]} username:{user['data'].decode('utf-8')}")
-
+    while True:
+        msg = client.recv(BUFSIZ)
+        if msg != bytes("{quit}", "utf8"):
+            broadcast(msg, name+": ")
         else:
-            message = receive_message(notified_socket)
+            client.send(bytes("{quit}", "utf8"))
+            client.close()
+            del clients[client]
+            broadcast(bytes(f"{name} has left the chat.", "utf8"))
+            break
 
-            if message is False:
-                print(f"Closed connection from {clients[notified_socket]['data'].decode('utf-8')}")
-                sockets_list.remove(notified_socket)
-                del clients[notified_socket]
-                continue
 
-            user = clients[notified_socket]
-            print(f"Received message from {user['data'].decode('utf-8')}: {message['data'].decode('utf-8')}")
+def broadcast(msg, prefix=""):
+    for sock in clients:
+        sock.send(bytes(prefix, "utf8")+msg)
 
-            for client_socket in clients:
-                if client_socket != notified_socket:
-                    client_socket.send(user['header'] + user['data'] + message['header'] + message['data'])
-    
-    for notified_socket in exception_sockets:
-        sockets_list.remove(notified_socket)
-        del clients[notified_socket]
+if __name__ == "__main__":
+    SERVER.listen(5)
+    print("Waiting for connection...")
+    ACCEPT_THREAD = threading.Thread(target=accept_incoming_connections)
+    ACCEPT_THREAD.start()
+    ACCEPT_THREAD.join()
+    SERVER.close()

@@ -1,53 +1,57 @@
 import socket
-import select
-import errno
-import sys
+import threading
+import tkinter
 
-HEADER_LENGTH = 10
+HOST = '127.0.0.1'
+PORT = 8080
+BUFSIZ = 1024
+ADDR = (HOST, PORT)
 
-IP = "127.0.0.1"
-PORT = 1234
+def receive():
+    while True:
+        try:
+            msg = client_socket.recv(BUFSIZ).decode("utf8")
+            msg_list.insert(tkinter.END, msg)
+        except:
+            break
 
-my_username = input("Username: ")
+
+def send(event=None):
+    msg = my_msg.get()
+    my_msg.set("")
+    client_socket.send(bytes(msg, "utf8"))
+    if msg == "{quit}":
+        client_socket.close()
+        top.quit()
+
+
+def on_closing(event=None):
+    my_msg.set("{quit}")
+    send()
+
+top = tkinter.Tk()
+top.title("Chatter")
+
+messages_frame = tkinter.Frame(top)
+my_msg = tkinter.StringVar()
+scrollbar = tkinter.Scrollbar(messages_frame)
+msg_list = tkinter.Listbox(messages_frame, height=15, width=50, yscrollcommand=scrollbar.set)
+scrollbar.pack(side=tkinter.RIGHT, fill=tkinter.Y)
+msg_list.pack(side=tkinter.LEFT, fill=tkinter.BOTH)
+msg_list.pack()
+messages_frame.pack()
+
+entry_field = tkinter.Entry(top, textvariable=my_msg)
+entry_field.bind("<Return>", send)
+entry_field.pack()
+send_button = tkinter.Button(top, text="Send", command=send)
+send_button.pack()
+
+top.protocol("WM_DELETE_WINDOW", on_closing)
+
 client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-client_socket.connect((IP,PORT))
-client_socket.setblocking(False)
+client_socket.connect(ADDR)
 
-username = my_username.encode("utf-8")
-username_header = f"{len(username):<{HEADER_LENGTH}}".encode("utf-8")
-client_socket.send(username_header + username)
-
-while True:
-    message = input(f"{my_username} > ")
-
-    if message:
-        message = message.encode("utf-8")
-        message_header = f"{len(message):<{HEADER_LENGTH}}".encode("utf-8")
-        client_socket.send(message_header + message)
-    
-    try:
-        while True:
-            # receive things
-            username_header = client_socket.recv(HEADER_LENGTH)
-            if not len(username_header):
-                print("connection closed by the server")
-                sys.exit
-            
-            username_length = int(username_header.decode("utf-8").strip())
-            username = client_socket.recv(username_length).decode("utf-8")
-            
-            message_header = client_socket.recv(HEADER_LENGTH)
-            message_length = int(message_header.decode("utf-8").strip())
-            message = client_socket.recv(message_length).decode("utf-8")
-
-            print(f"{username} > {message}")
-
-    except IOError as e:
-        if e.errno != errno.EAGAIN and e.errno != errno.EWOULDBLOCK:
-            print('reading error', str(e))
-            sys.exit()
-        continue
-
-    except Exception as e:
-        print('General error', str(e))
-        sys.exit()
+receive_thread = threading.Thread(target=receive)
+receive_thread.start()
+tkinter.mainloop()
