@@ -2,7 +2,7 @@ import socket
 import threading
 import tkinter
 
-HOST = '127.0.0.1'
+HOST = '192.168.0.211'
 PORT = 8080
 BUFSIZ = 1024
 ADDR = (HOST, PORT)
@@ -30,7 +30,7 @@ def on_closing(event=None):
     send()
 
 top = tkinter.Tk()
-top.title("Chatter")
+top.title("Chat")
 
 messages_frame = tkinter.Frame(top)
 my_msg = tkinter.StringVar()

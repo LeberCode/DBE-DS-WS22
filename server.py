@@ -1,7 +1,7 @@
 import socket
 import threading
 
-HOST = ''
+HOST = '192.168.0.211'
 PORT = 8080
 BUFSIZ = 1024
 ADDR = (HOST, PORT)
